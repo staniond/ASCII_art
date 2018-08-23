@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-import numpy
-from PIL import Image, ImageOps
+import argparse
 import glob
 import os
-import argparse
+import sys
+
+import numpy
+from PIL import Image, ImageOps
 
 
 class PixelImage:
@@ -16,26 +18,27 @@ class PixelImage:
         for i in range(self.height):
             self.ascii.append([])
             for j in range(self.width):
-                self.ascii[i].append(ASCIIImage.get_char(self.pixels[i][j]) * 2)
+                self.ascii[i].append(LiveImage.get_char(self.pixels[i][j]) * 2)
 
     def write_to_file(self, path):
         with open(path, "w") as file:
             for i in range(self.height):
-                file.write(''.join(self.ascii[i]) + "\n")
+                file.write(''.join(self.ascii[i]) + "\n")  # TODO use string builder
+            file.flush()
 
     def print(self):
         for i in range(self.height):
-            print(''.join(self.ascii[i]))
+            sys.stdout.write(''.join(self.ascii[i]) + "\n")  # TODO use string builder
 
     char_list = ["#", "@", "0", "$", "%", "/", "(", "!", ";", ",", "-", ".", "`", " "]
     coefficient = len(char_list) / 256
 
     @staticmethod
     def get_char(colour):
-        return ASCIIImage.char_list[int((colour * ASCIIImage.coefficient))]
+        return LiveImage.char_list[int(colour * LiveImage.coefficient)]
 
 
-class ASCIIImage(PixelImage):
+class LiveImage(PixelImage):
 
     def __init__(self, image_path, max_width=424, max_height=140):
         if not os.path.isfile(image_path):
@@ -50,18 +53,16 @@ class ASCIIImage(PixelImage):
 
 
 def main():
-    parser = argparse.ArgumentParser(prog="ascii_converter.py",
+    parser = argparse.ArgumentParser(prog="ascii_viewer.py",
                                      description="Simple image to ascii converter, supports png and jpg files")
     parser.add_argument("source_path",
                         help="path to a file or a directory, if directory all png and jpg files will be converted")
+    parser.add_argument("max_width", type=int,
+                        help="rescale the picture to have <max_width>:<max_height> characters (preserves aspect ratio)")
+    parser.add_argument("max_height", type=int,
+                        help="rescale the picture to <max_width>:<max_height> (preserves aspect ratio)")
     parser.add_argument("-p", "--print", action="store_true", help="print to stdout instead of saving to a file")
-    parser.add_argument("-r", "--resolution", help="rescale the picture to <width>:<height>")
     args = parser.parse_args()
-
-    try:
-        res = tuple(map(int, args.resolution.split(":")))
-    except ValueError and AttributeError:
-        res = None
 
     if os.path.isdir(args.source_path):
         extensions = ["png", "PNG", "jpg", "JPG", "jpeg", "JPEG"]
@@ -70,7 +71,7 @@ def main():
             paths += glob.glob(args.source_path + "/*." + extension)
 
         for path in paths:
-            ascii_image = ASCIIImage(path, res[0], res[1])
+            ascii_image = LiveImage(path, args.max_width, args.max_height)
             if args.print:
                 print(f"{path}:")
                 ascii_image.print()
@@ -80,7 +81,7 @@ def main():
                 print(f"Created {path[:-3]+'txt'}")
 
     elif os.path.isfile(args.source_path):
-        ascii_image = ASCIIImage(args.source_path, args.width, args.height)
+        ascii_image = LiveImage(args.source_path, args.width, args.height)
         if args.print:
             ascii_image.print()
         else:
