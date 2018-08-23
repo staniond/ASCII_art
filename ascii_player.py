@@ -17,6 +17,7 @@ class Video:
         self.source = source
 
         info = self.get_info()
+
         if res is not None:
             self.res = res
         else:
@@ -25,7 +26,9 @@ class Video:
             self.fps = fps
         else:
             self.fps = info[2]
+
         self.frames = info[3]
+        self.duration = info[4]
 
     def __enter__(self):
         return self
@@ -34,7 +37,7 @@ class Video:
         return True
 
     def get_info(self):
-        """Should return tuple - (width, height, fps, frames)"""
+        """Should return tuple - (width, height, fps, frames, duration)"""
         raise NotImplementedError
 
     def frame_generator(self):
@@ -47,18 +50,19 @@ class LiveVideo(Video):
         if self.source.startswith("http://"):
             time.sleep(.25)
 
-        self.frame_command = ["ffmpeg",
-                              '-i', source,
-                              '-f', 'image2pipe',
-                              '-pix_fmt', 'gray',  # "'-pix_fmt', 'rgb24'," for rgb
-                              '-vf', f'scale={self.res[0]}:{self.res[1]}',
-                              '-hide_banner',
-                              '-vcodec', 'rawvideo', '-']
-
     def frame_generator(self, raw=False):
+        frame_command = ["ffmpeg",
+                         '-i', self.source,
+                         '-f', 'image2pipe',
+                         # '-r', f'{self.fps}', # drops or duplicates frames (ffprobe not correct - rip progressbar)
+                         '-pix_fmt', 'gray',  # "'-pix_fmt', 'rgb24'," for rgb
+                         '-vf', f'scale={self.res[0]}:{self.res[1]}',
+                         '-hide_banner',
+                         '-vcodec', 'rawvideo', '-']
+
         # noinspection PyAttributeOutsideInit
-        self.pipe = sp.Popen(self.frame_command, stdout=sp.PIPE, stderr=sp.DEVNULL,
-                             bufsize=self.res[0] * self.res[1] * 1)
+        self.pipe = sp.Popen(frame_command, stdout=sp.PIPE, stderr=sp.DEVNULL,
+                             bufsize=10 ** 8)
 
         while True:
             raw_image = self.pipe.stdout.read(self.res[0] * self.res[1])  # * 3 for rgb
@@ -81,29 +85,44 @@ class LiveVideo(Video):
                    self.source,
                    "-hide_banner",
                    "-select_streams", "v",
-                   "-show_entries", "stream=width,height,r_frame_rate,nb_frames",
+                   "-show_entries", "stream=width,height,duration,r_frame_rate,nb_frames",
+                   "-show_entries", "format=duration",
                    "-print_format", "json",
                    "-v", "quiet"]
         pipe = sp.Popen(command, stdout=sp.PIPE, stderr=sp.DEVNULL)
         string = pipe.stdout.read().decode()
 
-        info = json.loads(string)["streams"][0]
+        info = json.loads(string)
+        stream_info = info["streams"][0]
+        format_info = info["format"]
 
-        width = info.get("width")
-        height = info.get("height")
+        width = stream_info.get("width")
+        height = stream_info.get("height")
         try:
-            fps = eval(info.get("r_frame_rate"))
+            fps = eval(stream_info.get("r_frame_rate"))
         except SyntaxError:
             fps = None
         try:
-            frames = int(info.get("nb_frames"))
+            frames = int(stream_info.get("nb_frames"))
         except (ValueError, TypeError):
             frames = None
 
-        return width, height, fps, frames
+        try:
+            if "duration" in stream_info:
+                duration = float(stream_info["duration"])
+            else:
+                duration = float(format_info.get("duration"))
+        except (ValueError, TypeError):
+            duration = None
+
+        if frames is None and duration is not None:
+            frames = duration * fps
+
+        return width, height, fps, frames, duration
 
 
 class FileVideo(Video):
+    # TODO
     def get_info(self):
         pass
 
@@ -112,16 +131,18 @@ class FileVideo(Video):
 
 
 def play(video, args, log):
-    log.print(f"resolution: {video.res[0]}:{video.res[1]}, fps: {video.fps}, source: {video.source}")
+    log.print(
+        f"source: {video.source}, resolution: {video.res[0]}x{video.res[1]}px, ({video.res[0]*2}x{video.res[1]}char),"
+        f" fps: {video.fps}, frames: {video.frames}, duration: {video.duration}")
     bar = util.ProgressBar(video.res[0], video.frames)
 
     os.system("clear")
 
     try:
-        fps_time = time.time()
+        start_time = time.time()
         frame_time = 1 / video.fps
         last_time = time.time()
-        i = 0
+        frame_count = 0
 
         for frame_pixel_array in video.frame_generator():
             if not args.ignore_fps and ((time.time() - last_time) < frame_time):
@@ -130,27 +151,27 @@ def play(video, args, log):
             last_time = time.time()
             sys.stdout.write('\033[H')
             ascii_viewer.PixelImage(frame_pixel_array).print()
-            i += 1
+            sys.stdout.write(bar.get_bar(frame_count))
+            frame_count += 1
 
-            sys.stdout.write(bar.get_bar(i))
             sys.stdout.write(
-                f"Video from {video.source}, "
-                f"resolution: {video.res[0]}x{video.res[1]}px ({video.res[0]*2}x{video.res[1]}char), "
-                f"frame {i}, {i/(time.time() - fps_time)}fps      ")
+                f"{video.source}, "
+                f"{video.res[0]}x{video.res[1]}px ({video.res[0]*2}x{video.res[1]}char), "
+                f"frame {frame_count}, {'%.2f' % (frame_count/(time.time() - start_time))}fps ({video.fps} target)")
             sys.stdout.flush()
     except KeyboardInterrupt:
         log.print("keyboard interrupt")
 
     os.system("clear")
 
-    log.print(f"{time.time() - fps_time}s, {i} frames,"
-              f" {i/(time.time() - fps_time)} achieved fps")
-    print(f"End of video - {time.time() - fps_time}s, {i} frames,"
-          f" {i/(time.time() - fps_time)} fps ({video.fps} target fps)")
+    message = f"End of video - {time.time() - start_time}s, {frame_count} frames played," \
+              f" {frame_count/(time.time() - start_time)} fps ({video.fps} target)"
+    log.print(message)
+    print(message)
 
 
 def main(args):
-    log = util.Logger()
+    log = util.Logger(args.log, "ascii.log")
 
     if args.path.endswith(".aiv"):
         with FileVideo(args.path, args.resolution, args.fps) as video:
@@ -159,7 +180,7 @@ def main(args):
         with LiveVideo(args.path, args.resolution, args.fps) as video:
             play(video, args, log)
 
-    log.log_all("data/log.txt")
+    log.log_all(True)
 
 
 def get_arguments():
@@ -168,11 +189,14 @@ def get_arguments():
     parser.add_argument("path", help="Path to file to play")
     parser.add_argument("-i", "--ignore-fps", action="store_true",
                         help="play the video as fast as possible")
+    parser.add_argument("-l", "--log", action="store_true",
+                        help="save debug info to ascii.log file")
+    parser.add_argument("--fit", action="store_true",
+                        help="set the resolution to fit the terminal (cannot be used with the -r option)")
     parser.add_argument("-r", "--resolution", type=int, nargs=2, metavar=("width", "height"),
-                        help="rescale the video to width and height")
+                        help="rescale the video to width and height (cannot be used with the --fit option)")
     parser.add_argument("-f", "--fps", type=int,
-                        help="override the fps data found in video "
-                             "(default 25 if none is found and this option is not specified)")
+                        help="override the fps data found in video")
     args = parser.parse_args()
 
     if not os.path.isfile(args.path) and not args.path.startswith("http://"):
@@ -180,6 +204,16 @@ def get_arguments():
         print()
         parser.print_help()
         exit(1)
+
+    if args.fit and args.resolution:
+        print("--fit and --resolution options cannot be used simultaneously")
+        print()
+        parser.print_help()
+        exit(1)
+
+    if args.fit:
+        size = util.get_terminal_size()
+        vars(args)["resolution"] = size[0] // 2, size[1] - 4
 
     return args
 

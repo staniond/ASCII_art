@@ -1,31 +1,44 @@
+import subprocess as sp
+
+
+def get_terminal_size():
+    size = sp.run(["stty", "size"], stdout=sp.PIPE).stdout.decode()[:-1].split(" ")
+    return int(size[1]), int(size[0])
+
+
 class Logger:
-    def __init__(self):
+    def __init__(self, log, path):
+        self.log = log
+        self.path = path
         self.buffer = []
 
     def print(self, *objs):
-        for obj in objs:
-            self.buffer.append(obj)
+        if self.log:
+            for obj in objs:
+                self.buffer.append(obj)
 
-    def log_all(self, file=None):
-        if file is None:
-            for obj in self.buffer:
-                print(obj)
-        else:
-            with open(file, "w") as file:
+    def log_all(self, to_file=False):
+        if self.log:
+            if not to_file:
                 for obj in self.buffer:
-                    file.write(repr(obj) + "\n")
+                    print(obj)
+            else:
+                with open(self.path, "w") as file:
+                    for obj in self.buffer:
+                        file.write(str(obj) + "\n")
 
 
 class ProgressBar:
-    def __init__(self, width, max_value):
-        self.width = width*2-1
-        self.max_value = max_value
+    def __init__(self, width, frames):
+        self.frames = frames
+        self.width = width * 2 - 1
 
-    def get_bar(self, value):
-        if value is not None and self.max_value is not None:
-            return f"|{' '*(self.width-1)}|\n" \
-                   f"|{'>'*int(self.width*(value/self.max_value))}" \
-                   f"{'-'*int(self.width*(1-value/self.max_value))}|\n" \
-                   f"|{' '*(self.width-1)}|\n"
-        else:
-            return ""
+    def get_bar(self, frame_count):
+        return f"|{' '*(self.width-1)}|\n" \
+               f"|{'>'*int(self.width*(frame_count/self.frames))}" \
+               f"{'-'*int(self.width*(1-frame_count/self.frames))}|\n" \
+               f"|{' '*(self.width-1)}|\n"
+
+
+if __name__ == '__main__':
+    print(get_terminal_size())
