@@ -46,7 +46,8 @@ class Video:
 
 class LiveVideo(Video):
     def __init__(self, source, res, fps):
-        super().__init__(source, res, fps)
+        super().__init__(source, res, fps,)
+
         if self.source.startswith("http://"):
             time.sleep(.25)
 
@@ -134,7 +135,7 @@ def play(video, args, log):
     log.print(
         f"source: {video.source}, resolution: {video.res[0]}x{video.res[1]}px, ({video.res[0]*2}x{video.res[1]}char),"
         f" fps: {video.fps}, frames: {video.frames}, duration: {video.duration}")
-    bar = util.ProgressBar(video.res[0], video.frames)
+    bar = util.ProgressBar(video)
 
     os.system("clear")
 
@@ -151,7 +152,7 @@ def play(video, args, log):
             last_time = time.time()
             sys.stdout.write('\033[H')
             ascii_viewer.PixelImage(frame_pixel_array).print()
-            sys.stdout.write(bar.get_bar(frame_count))
+            sys.stdout.write(bar.get_bar(frame_count, start_time))
             frame_count += 1
 
             sys.stdout.write(
@@ -191,10 +192,8 @@ def get_arguments():
                         help="play the video as fast as possible")
     parser.add_argument("-l", "--log", action="store_true",
                         help="save debug info to ascii.log file")
-    parser.add_argument("--fit", action="store_true",
-                        help="set the resolution to fit the terminal (cannot be used with the -r option)")
     parser.add_argument("-r", "--resolution", type=int, nargs=2, metavar=("width", "height"),
-                        help="rescale the video to width and height (cannot be used with the --fit option)")
+                        help="rescale the video to width and height")
     parser.add_argument("-f", "--fps", type=int,
                         help="override the fps data found in video")
     args = parser.parse_args()
@@ -205,13 +204,7 @@ def get_arguments():
         parser.print_help()
         exit(1)
 
-    if args.fit and args.resolution:
-        print("--fit and --resolution options cannot be used simultaneously")
-        print()
-        parser.print_help()
-        exit(1)
-
-    if args.fit:
+    if not args.resolution:
         size = util.get_terminal_size()
         vars(args)["resolution"] = size[0] // 2, size[1] - 4
 

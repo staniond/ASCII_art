@@ -29,15 +29,25 @@ class Logger:
 
 
 class ProgressBar:
-    def __init__(self, width, frames):
-        self.frames = frames
-        self.width = width * 2 - 1
+    def __init__(self, video):
+        self.frames = video.frames
+        self.width = video.res[0] * 2 - 1
+        self.duration = video.duration
 
-    def get_bar(self, frame_count):
-        return f"|{' '*(self.width-1)}|\n" \
-               f"|{'>'*int(self.width*(frame_count/self.frames))}" \
-               f"{'-'*int(self.width*(1-frame_count/self.frames))}|\n" \
-               f"|{' '*(self.width-1)}|\n"
+    def get_bar(self, frame_count, start_time):
+        # TODO add time stamp to the middle of the third row
+        if self.duration and self.frames:
+            return f"|{' '*(self.width-1)}|\n" \
+                   f"|{'>'*int(self.width*(frame_count/self.frames))}" \
+                   f"{'-'*int(self.width*(1-frame_count/self.frames))}|\n" \
+                   f"|{' '*(self.width-1)}|\n"
+        elif self.frames:
+            return f"|{' '*(self.width-1)}|\n" \
+                   f"|{'>'*int(self.width*(frame_count/self.frames))}" \
+                   f"{'-'*int(self.width*(1-frame_count/self.frames))}|\n" \
+                   f"|{'t'*(self.width-1)}|\n"
+        else:
+            return ""
 
 
 if __name__ == '__main__':
