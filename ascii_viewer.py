@@ -58,9 +58,9 @@ def main():
     parser.add_argument("source_path",
                         help="path to a file or a directory, if directory all png and jpg files will be converted")
     parser.add_argument("max_width", type=int,
-                        help="rescale the picture to have <max_width>:<max_height> characters (preserves aspect ratio)")
+                        help="rescale the picture to have max_width characters (preserves aspect ratio)")
     parser.add_argument("max_height", type=int,
-                        help="rescale the picture to <max_width>:<max_height> (preserves aspect ratio)")
+                        help="rescale the picture to max_height (preserves aspect ratio)")
     parser.add_argument("-p", "--print", action="store_true", help="print to stdout instead of saving to a file")
     args = parser.parse_args()
 
