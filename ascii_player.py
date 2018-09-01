@@ -11,6 +11,8 @@ import numpy
 import ascii_viewer
 import util
 
+terminal_size = util.get_terminal_size()
+
 
 class Video:
     def __init__(self, source, res, fps):
@@ -46,7 +48,7 @@ class Video:
 
 class LiveVideo(Video):
     def __init__(self, source, res, fps):
-        super().__init__(source, res, fps,)
+        super().__init__(source, res, fps, )
 
         if self.source.startswith("http://"):
             time.sleep(.25)
@@ -117,7 +119,7 @@ class LiveVideo(Video):
             duration = None
 
         if frames is None and duration is not None:
-            frames = duration * fps
+            frames = int(duration * fps)
 
         return width, height, fps, frames, duration
 
@@ -152,13 +154,15 @@ def play(video, args, log):
             last_time = time.time()
             sys.stdout.write('\033[H')
             ascii_viewer.PixelImage(frame_pixel_array).print()
-            sys.stdout.write(bar.get_bar(frame_count, start_time))
             frame_count += 1
 
-            sys.stdout.write(
-                f"{video.source}, "
-                f"{video.res[0]}x{video.res[1]}px ({video.res[0]*2}x{video.res[1]}char), "
-                f"frame {frame_count}, {'%.2f' % (frame_count/(time.time() - start_time))}fps ({video.fps} target)")
+            bot_info = f"{video.source}, " \
+                       f"{video.res[0]}x{video.res[1]}px ({video.res[0]*2}x{video.res[1]}char), " \
+                       f"frame {frame_count}, " \
+                       f"{'%.2f' % (frame_count/(time.time() - start_time))}fps ({video.fps} target)"
+            sys.stdout.write(bar.get_bar(frame_count))
+            if len(bot_info) < terminal_size[0]:
+                sys.stdout.write(bot_info)
             sys.stdout.flush()
     except KeyboardInterrupt:
         log.print("keyboard interrupt")
@@ -205,8 +209,7 @@ def get_arguments():
         exit(1)
 
     if not args.resolution:
-        size = util.get_terminal_size()
-        vars(args)["resolution"] = size[0] // 2, size[1] - 4
+        vars(args)["resolution"] = terminal_size[0] // 2, terminal_size[1] - 4
 
     return args
 
