@@ -61,6 +61,7 @@ class LiveVideo(Video):
                          '-pix_fmt', 'gray',  # "'-pix_fmt', 'rgb24'," for rgb
                          '-vf', f'scale={self.res[0]}:{self.res[1]}',
                          '-hide_banner',
+                         '-sws_flags', 'bicubic',
                          '-vcodec', 'rawvideo', '-']
 
         # noinspection PyAttributeOutsideInit
@@ -156,13 +157,14 @@ def play(video, args, log):
             ascii_viewer.PixelImage(frame_pixel_array).print()
             frame_count += 1
 
+            sys.stdout.write(bar.get_bar(frame_count))
             bot_info = f"{video.source}, " \
                        f"{video.res[0]}x{video.res[1]}px ({video.res[0]*2}x{video.res[1]}char), " \
                        f"frame {frame_count}, " \
                        f"{'%.2f' % (frame_count/(time.time() - start_time))}fps ({video.fps} target)"
-            sys.stdout.write(bar.get_bar(frame_count))
-            if len(bot_info) < terminal_size[0]:
+            if len(bot_info) < video.res[0] or (terminal_size is not None and len(bot_info) < terminal_size[0]):
                 sys.stdout.write(bot_info)
+
             sys.stdout.flush()
     except KeyboardInterrupt:
         log.print("keyboard interrupt")
@@ -185,7 +187,8 @@ def main(args):
         with LiveVideo(args.path, args.resolution, args.fps) as video:
             play(video, args, log)
 
-    log.log_all(True)
+    if args.log:
+        log.log_all(True)
 
 
 def get_arguments():
@@ -209,7 +212,9 @@ def get_arguments():
         exit(1)
 
     if not args.resolution:
-        vars(args)["resolution"] = terminal_size[0] // 2, terminal_size[1] - 4
+        if terminal_size is None:
+            raise ValueError("Could not get the terminal size. -r flag is required to continue")
+        args.resolution = terminal_size[0] // 2, terminal_size[1] - 4
 
     return args
 

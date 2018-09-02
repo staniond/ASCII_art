@@ -2,8 +2,11 @@ import os
 
 
 def get_terminal_size():
-    size = os.get_terminal_size()
-    return size[0], size[1]
+    try:
+        size = os.get_terminal_size()
+        return size[0], size[1]
+    except OSError:
+        return None
 
 
 def to_hours_minutes_seconds(seconds):
